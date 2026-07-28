@@ -433,4 +433,198 @@ with tab_v062:
         
         col_c1, col_c2, col_c3, col_c4, col_c5 = st.columns(5)
         col_c1.metric("🚀 今日建議建倉", f"{len(buy_df)} 筆")
-        col_c2.metric("🔴 觸發防守賣出", f"{len(sel
+        col_c2.metric("🔴 觸發防守賣出", f"{len(sell_df)} 筆")
+        col_c3.metric("📦 獲利續抱中", f"{len(hold_df)} 筆")
+        col_c4.metric("🛡️ 風控安全閥攔截", f"{len(risk_df)} 筆")
+        col_c5.metric("💵 空手觀望", f"{len(cash_df)} 筆")
+        
+        display_cols = ['股票代號', '當前市價', '產業領域', '策略手法', '倉位狀態', '建議進場價(持股成本)', '未實現損益', '嚴格防守價', '推薦指數']
+        
+        with st.expander(f"🚀 今日建議大膽建倉 ({len(buy_df)} 筆)", expanded=len(buy_df)>0):
+            if not buy_df.empty: st.dataframe(buy_df[display_cols], use_container_width=True, hide_index=True)
+            else: st.info("今日無觸發建倉訊號之個股。")
+                
+        with st.expander(f"🔴 今日觸發防守賣出 ({len(sell_df)} 筆)", expanded=len(sell_df)>0):
+            if not sell_df.empty: st.dataframe(sell_df[display_cols], use_container_width=True, hide_index=True)
+            else: st.info("今日無觸發賣出/停損訊號之個股。")
+                
+        with st.expander(f"📦 獲利續抱中 ({len(hold_df)} 筆)", expanded=False):
+            if not hold_df.empty: st.dataframe(hold_df[display_cols], use_container_width=True, hide_index=True)
+            else: st.info("目前無持有中之個股。")
+                
+        with st.expander(f"🛡️ 風控安全閥攔截 ({len(risk_df)} 筆)", expanded=len(risk_df)>0):
+            if not risk_df.empty:
+                st.caption("提示：技術面雖達買點，但因自由現金流不良或財報將至，已被系統強制轉為 CASH 避險。")
+                st.dataframe(risk_df[display_cols], use_container_width=True, hide_index=True)
+            else: st.info("今日無被風控閥攔截之個股。")
+
+        with st.expander(f"💵 空手觀望 ({len(cash_df)} 筆)", expanded=False):
+            if not cash_df.empty: st.dataframe(cash_df[display_cols], use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("📋 完整美股多因子對照總表")
+
+        def apply_block_shading(df):
+            unique_tickers = df["股票代號"].unique()
+            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+            for i, ticker in enumerate(unique_tickers):
+                bg_color = 'background-color: rgba(128, 128, 128, 0.16)' if i % 2 == 0 else 'background-color: rgba(0, 0, 0, 0)'
+                mask = df["股票代號"] == ticker
+                styles.loc[mask, :] = bg_color
+            return styles
+
+        styled_df = df_res.style.apply(apply_block_shading, axis=None)
+        st.dataframe(styled_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("💡 請按下上方「🚀 啟動 V06.3 美股全自動多因子掃描引擎」按鈕開始運算。")
+
+# --- 分頁 2: 新增【🎯 七維量化戰術矩陣】獨立專頁 ---
+with tab_matrix:
+    if st.session_state.calculated:
+        df_res = st.session_state.final_df
+        
+        st.header("🎯 七維量化戰術矩陣看板 (跨策略共振與型態快選)")
+        st.markdown("透過跨策略訊號共振，1 秒辨識「飆股發動、高勝率突破、大戶吸籌、頭部背離與假突破陷阱」")
+
+        matrix_data = []
+        unique_tickers = df_res['股票代號'].unique()
+
+        for t in unique_tickers:
+            sub = df_res[df_res['股票代號'] == t].set_index('策略手法')
+            
+            get_s = lambda name: sub.loc[name, '倉位狀態'] if name in sub.index else ''
+            get_r = lambda name: sub.loc[name, '推薦指數'] if name in sub.index else ''
+            
+            st_A, st_B, st_C, st_D, st_E = get_s('A: 激進動能型'), get_s('B: 穩健波段型'), get_s('C: 槓桿防守型'), get_s('D: 均值回歸抄底型'), get_s('E: 籌碼主力跟隨型')
+            rec_A, rec_B, rec_C, rec_D, rec_E = get_r('A: 激進動能型'), get_r('B: 穩健波段型'), get_r('C: 槓桿防守型'), get_r('D: 均值回歸抄底型'), get_r('E: 籌碼主力跟隨型')
+            
+            sector = sub['產業領域'].iloc[0] if '產業領域' in sub.columns else '美股企業'
+            price = sub['當前市價'].iloc[0] if '當前市價' in sub.columns else '-'
+            
+            sells = [s for s in [st_A, st_B, st_C, st_D, st_E] if 'SELL' in s]
+            
+            is_m1 = ('BUY' in st_A) and ('BUY' in st_B or 'BUY' in st_C) and ('BUY' in st_E) and any(r != '❌ 不推薦' for r in [rec_A, rec_B, rec_C, rec_E])
+            is_m2 = ('BUY' in st_B and rec_B in ['⭐⭐⭐⭐', '⭐⭐⭐⭐⭐']) or ('BUY' in st_C and rec_C in ['⭐⭐⭐⭐', '⭐⭐⭐⭐⭐'])
+            is_m3 = ('BUY' in st_E or 'HOLD' in st_E) and ('CASH' in st_B and 'CASH' in st_C) and (rec_E != '❌ 不推薦')
+            is_m4 = ('BUY' in st_D)
+            is_m5 = any(('現金流' in s or '財報' in s) for s in [st_A, st_B, st_C, st_D, st_E])
+            is_m6 = ('HOLD' in st_B or 'HOLD' in st_C) and ('SELL' in st_A or 'SELL' in st_E)
+            is_m7 = len(sells) >= 2
+            
+            buy_rows = [sub.loc[s] for s in sub.index if 'BUY' in sub.loc[s, '倉位狀態']]
+            is_m8 = len(buy_rows) >= 2 and all(b['推薦指數'] == '❌ 不推薦' for b in buy_rows)
+
+            matrix_data.append({
+                "股票代號": t, "當前市價": price, "產業領域": sector,
+                "🔥全面共振": is_m1, "🌊波段突破": is_m2, "🕵️籌碼吸籌": is_m3,
+                "🛒價值窪地": is_m4, "🛑風控攔截": is_m5, "⚠️頭部背離": is_m6,
+                "🔴集體撤退": is_m7, "❌洗盤怪獸": is_m8
+            })
+
+        m_df = pd.DataFrame(matrix_data)
+
+        df_m1 = m_df[m_df['🔥全面共振']][['股票代號', '當前市價', '產業領域']]
+        df_m2 = m_df[m_df['🌊波段突破']][['股票代號', '當前市價', '產業領域']]
+        df_m3 = m_df[m_df['🕵️籌碼吸籌']][['股票代號', '當前市價', '產業領域']]
+        df_m4 = m_df[m_df['🛒價值窪地']][['股票代號', '當前市價', '產業領域']]
+        df_m5 = m_df[m_df['🛑風控攔截']][['股票代號', '當前市價', '產業領域']]
+        df_m6 = m_df[m_df['⚠️頭部背離']][['股票代號', '當前市價', '產業領域']]
+        df_m7 = m_df[m_df['🔴集體撤退']][['股票代號', '當前市價', '產業領域']]
+        df_m8 = m_df[m_df['❌洗盤怪獸']][['股票代號', '當前市價', '產業領域']]
+
+        col_m1, col_m2, col_m3, col_m4, col_m5, col_m6, col_m7 = st.columns(7)
+        col_m1.metric("🔥全面共振", f"{len(df_m1)} 檔")
+        col_m2.metric("🌊波段突破", f"{len(df_m2)} 檔")
+        col_m3.metric("🕵️籌碼吸籌", f"{len(df_m3)} 檔")
+        col_m4.metric("🛒價值窪地", f"{len(df_m4)} 檔")
+        col_m5.metric("⚠️頭部背離", f"{len(df_m6)} 檔")
+        col_m6.metric("🔴集體撤退", f"{len(df_m7)} 檔")
+        col_m7.metric("❌洗盤怪獸", f"{len(df_m8)} 檔")
+
+        st.divider()
+
+        with st.expander(f"🔥 1. 全面共振多頭 (動能+突破+籌碼三大維度 100% 同步看多) — {len(df_m1)} 檔", expanded=len(df_m1)>0):
+            if not df_m1.empty: st.dataframe(df_m1, use_container_width=True, hide_index=True)
+            else: st.info("今日無出現多方全面共振訊號之標的。")
+
+        with st.expander(f"🌊 2. 高勝率波段突破 (波段/槓桿策略強勢突破 + 高歷史勝率評級) — {len(df_m2)} 檔", expanded=len(df_m2)>0):
+            if not df_m2.empty: st.dataframe(df_m2, use_container_width=True, hide_index=True)
+            else: st.info("今日無出現波段獨立突破買訊之標的。")
+
+        with st.expander(f"🕵️ 3. 籌碼大戶潛伏 (主力籌碼卡位/續抱，技術線型打底未突破) — {len(df_m3)} 檔", expanded=len(df_m3)>0):
+            if not df_m3.empty: st.dataframe(df_m3, use_container_width=True, hide_index=True)
+            else: st.info("今日無主力暗中吸籌之預備觀察標的。")
+
+        with st.expander(f"🛒 4. 價值超跌窪地 (遠低於 200MA 年線，且基本面健全之抄底標的) — {len(df_m4)} 檔", expanded=len(df_m4)>0):
+            if not df_m4.empty: st.dataframe(df_m4, use_container_width=True, hide_index=True)
+            else: st.info("今日無符合超跌價值抄底條件之標的。")
+
+        with st.expander(f"⚠️ 5. 動能/籌碼頭部背離 (波段續抱，但短線動能/主力已率先賣出) — {len(df_m6)} 檔", expanded=len(df_m6)>0):
+            if not df_m6.empty: st.dataframe(df_m6, use_container_width=True, hide_index=True)
+            else: st.info("今日無出現頭部背離警訊之標的。")
+
+        with st.expander(f"🔴 6. 多頭集體撤退 (2 個或以上策略同時跳出防守賣出，警惕潰敗) — {len(df_m7)} 檔", expanded=len(df_m7)>0):
+            if not df_m7.empty: st.dataframe(df_m7, use_container_width=True, hide_index=True)
+            else: st.info("今日無出現多重賣訊共振之標的。")
+
+        with st.expander(f"❌ 7. 高波動洗盤怪獸 (單日多策略買訊，但歷史評級全為不推薦，嚴禁追高) — {len(df_m8)} 檔", expanded=len(df_m8)>0):
+            if not df_m8.empty: st.dataframe(df_m8, use_container_width=True, hide_index=True)
+            else: st.info("今日無出現高波動洗盤怪獸標的。")
+    else:
+        st.info("💡 請按下上方「🚀 啟動 V06.3 美股全自動多因子掃描引擎」按鈕開始運算。")
+
+# --- 分頁 3: 歷史回測與線圖驗證 ---
+with tab_debug:
+    st.header("🛠️ 歷史回測與視覺化線圖驗證面板")
+    if st.session_state.calculated:
+        col_tk, col_st = st.columns(2)
+        with col_tk: debug_ticker = st.selectbox("🎯 選擇想檢查的股票代號", ticker_list)
+        with col_st: debug_strat = st.selectbox("🔮 選擇策略", ["A: 激進動能型", "B: 穩健波段型", "C: 槓桿防守型", "D: 均值回歸抄底型", "E: 籌碼主力跟隨型"])
+        db_key = (debug_ticker, debug_strat)
+        if db_key in st.session_state.detail_db:
+            data_pack = st.session_state.detail_db[db_key]
+            logs_df, buys, sells, v_df = data_pack["logs"], data_pack["buys"], data_pack["sells"], data_pack["v_df"]
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=v_df.index, y=v_df['Close'], mode='lines', name='收盤價', line=dict(color='lightgrey', width=1.5)))
+            if len(buys) > 0:
+                fig.add_trace(go.Scatter(x=[b[0] for b in buys], y=[b[1] for b in buys], mode='markers', name='🟢 BUY (進場)', marker=dict(symbol='triangle-up', size=12, color='#00FF00')))
+            if len(sells) > 0:
+                fig.add_trace(go.Scatter(x=[s[0] for s in sells], y=[s[1] for s in sells], mode='markers', name='🔴 SELL (出場)', marker=dict(symbol='triangle-down', size=12, color='#FF0000')))
+            fig.update_layout(title=f"<b>{debug_ticker} - {debug_strat} V06.3 軌跡圖</b>", xaxis_title="日期", yaxis_title="價格 ($)", template="plotly_dark")
+            st.plotly_chart(fig, use_container_width=True)
+            if not logs_df.empty: st.dataframe(logs_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("💡 請按下上方「🚀 啟動 V06.3 美股全自動多因子掃描引擎」按鈕開始運算。")
+
+# --- 分頁 4: 雲端自選清單線上管理 ---
+with tab_manage:
+    st.header("➕ 線上新增美股至雲端清單")
+    st.markdown("填寫下方欄位按下送出，系統將會**自動寫入你的美股 Google 試算表**，60 秒內全自動同步！")
+    
+    with st.form("add_us_stock_form"):
+        new_ticker = st.text_input("🎯 美股代號 (例如: NVDA 或 TSLA)", placeholder="NVDA").strip().upper()
+        new_name = st.text_input("🏷️ 產業領域/中文備註 (例如: AI半導體 或 輝達)", placeholder="AI半導體").strip()
+        submit_btn = st.form_submit_button("🚀 一鍵同步新增至雲端試算表")
+        
+        if submit_btn:
+            if not new_ticker:
+                st.warning("⚠️ 請務必輸入股票代號！")
+            else:
+                form_url = f"https://docs.google.com/forms/d/e/{GOOGLE_FORM_ID}/formResponse"
+                form_data = {
+                    ENTRY_TICKER_ID: new_ticker,
+                    ENTRY_NAME_ID: new_name
+                }
+                headers = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                }
+                try:
+                    res = requests.post(form_url, data=form_data, headers=headers)
+                    if res.status_code == 200:
+                        st.success(f"🎉 成功寫入！已將 【{new_ticker} - {new_name}】 自動新增至美股雲端試算表！")
+                        st.info("💡 請等待 60 秒快取更新，或至左側選單重新載入，即可在美股矩陣中看到新股票！")
+                    else:
+                        st.error(f"⚠️ 寫入失敗！Google 伺服器回應代碼：[{res.status_code}]")
+                        st.caption("提示：若代碼為 400 代表欄位格式不合；若為 403 代表表單權限尚未開放。")
+                except Exception as e:
+                    st.error(f"❌ 連線發生錯誤: {e}")
