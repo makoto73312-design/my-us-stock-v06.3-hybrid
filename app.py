@@ -87,11 +87,12 @@ YF_SECTOR_MAP = {
 @st.cache_data(ttl=1800)
 def fetch_macro_environment():
     try:
-        vix_df = yf.download("^VIX", period="5d", progress=False)
+        # 使用 yf.Ticker().history 避免 yf.download 的 MultiIndex 轉型失敗問題
+        vix_df = yf.Ticker("^VIX").history(period="5d")
         vix_clean = vix_df.dropna(subset=['Close'])
         vix_val = float(vix_clean['Close'].iloc[-1]) if not vix_clean.empty else 18.0
         
-        spy_df = yf.download("SPY", period="1y", progress=False)
+        spy_df = yf.Ticker("SPY").history(period="1y")
         spy_clean = spy_df.dropna(subset=['Close'])
         if not spy_clean.empty:
             spy_close = float(spy_clean['Close'].iloc[-1])
